@@ -736,6 +736,7 @@ public class CacheObjectBinaryProcessorImpl extends IgniteCacheObjectProcessorIm
         CacheObjectContext ctx0 = super.contextForCache(cfg);
 
         CacheObjectContext res = new CacheObjectBinaryContext(ctx,
+            cfg.getName(),
             ctx0.copyOnGet(),
             ctx0.storeValue(),
             binaryEnabled,
@@ -768,43 +769,43 @@ public class CacheObjectBinaryProcessorImpl extends IgniteCacheObjectProcessorIm
     }
 
     /** {@inheritDoc} */
-    @Override public KeyCacheObject toCacheKeyObject(CacheObjectContext ctx, Object obj, boolean userObj) {
-        return toCacheKeyObject(ctx, obj, userObj, -1);
-    }
-
-    /** {@inheritDoc} */
     @Override public KeyCacheObject toCacheKeyObject(
         CacheObjectContext ctx,
+        @Nullable GridCacheContext cctx,
         Object obj,
-        boolean userObj,
-        int partition
+        boolean userObj
     ) {
         if (!((CacheObjectBinaryContext)ctx).binaryEnabled())
-            return super.toCacheKeyObject(ctx, obj, userObj, partition);
+            return super.toCacheKeyObject(ctx, cctx, obj, userObj);
 
         if (obj instanceof KeyCacheObject) {
             if (obj instanceof BinaryObjectImpl) {
-                // Need to create a copy because the key can be reused at the application layer after that (IGNITE-3505).
-                BinaryObjectImpl bObj = (BinaryObjectImpl)obj;
-                obj = new BinaryObjectImpl(bObj.context(), bObj.array(), bObj.start());
-            }
+                int part = partition(ctx, cctx, obj);
 
-            ((KeyCacheObject)obj).partition(partition);
+                int part0 = ((KeyCacheObject)obj).partition();
+
+                if (part0 != part) {
+                    // Need to create a copy because the key can be reused at the application layer after that (IGNITE-3505).
+                    BinaryObjectImpl bObj = (BinaryObjectImpl)obj;
+
+                    obj = new BinaryObjectImpl(bObj.context(), bObj.array(), bObj.start());
+
+                    ((BinaryObjectImpl)obj).partition(part);
+                }
+            }
 
             return (KeyCacheObject)obj;
         }
 
-        if (((CacheObjectBinaryContext)ctx).binaryEnabled()) {
-            obj = toBinary(obj);
+        obj = toBinary(obj);
 
-            if (obj instanceof KeyCacheObject) {
-                ((KeyCacheObject)obj).partition(partition);
+        if (obj instanceof BinaryObjectImpl) {
+            ((KeyCacheObject)obj).partition(partition(ctx, cctx, obj));
 
-                return (KeyCacheObject)obj;
-            }
+            return (KeyCacheObject)obj;
         }
 
-        return toCacheKeyObject0(obj, userObj, partition);
+        return toCacheKeyObject0(ctx, cctx, obj, userObj);
     }
 
     /** {@inheritDoc} */
