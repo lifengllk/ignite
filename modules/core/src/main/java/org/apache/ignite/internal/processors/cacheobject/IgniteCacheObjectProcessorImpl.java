@@ -117,8 +117,15 @@ public class IgniteCacheObjectProcessorImpl extends GridProcessorAdapter impleme
         @Nullable GridCacheContext cctx,
         Object obj,
         boolean userObj) {
-        if (obj instanceof KeyCacheObject)
+        if (obj instanceof KeyCacheObject) {
+            KeyCacheObject key = (KeyCacheObject)obj;
+
+            if (key.partition() == -1)
+                // Assume all KeyCacheObjects except BinaryObject can not be reused for another cache.
+                key.partition(partition(ctx, cctx, key));
+
             return (KeyCacheObject)obj;
+        }
 
         return toCacheKeyObject0(ctx, cctx, obj, userObj);
     }
@@ -332,6 +339,21 @@ public class IgniteCacheObjectProcessorImpl extends GridProcessorAdapter impleme
          */
         UserKeyCacheObjectImpl(Object key, int part) {
             super(key, null, part);
+        }
+
+        /**
+         * @param key Key.
+         */
+        UserKeyCacheObjectImpl(Object key, byte[] valBytes, int part) {
+            super(key, valBytes, part);
+        }
+
+        /** {@inheritDoc} */
+        @Override public KeyCacheObject copy(int part) {
+            if (this.partition() == part)
+                return this;
+
+            return new UserKeyCacheObjectImpl(val, valBytes, part);
         }
 
         /** {@inheritDoc} */
